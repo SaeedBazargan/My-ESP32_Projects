@@ -1,13 +1,10 @@
 #ifndef __ESP_MPU9250_H__
 #define __ESP_MPU9250_H__
 
+#include "Arduino.h"
 #include "SPI.h"
 
-// <---- ------------ Variables ------------ ---->
-SPIClass _spi;
-uint8_t _csPin;
-
-#define FreeRTOS_En								0x01
+#define FreeRTOS_En								0x00
 // <---- ------------ START REGISTER MAPPING ------------ ---->
 #define MPU9250_I2C_ADDR						0xD0		// Default I2C address
 #define MPU9250_I_AM							0x71		// Who I am register value
@@ -134,8 +131,8 @@ typedef struct
 }MPU9250TypeDef;
 
 // <---- ------------ Main MPU9250 Functions ------------ ---->
-MPU9250_Result MPU9250_Init(SPIClass SPIx, uint8_t CS_GPIOx, MPU9250TypeDef* datastruct);
-MPU9250_Result MPU9250_ReadData(SPIClass *SPIx, uint8_t* buffer, uint8_t addr, uint8_t num);
-MPU9250_Result MPU9250_WriteData(SPIClass *SPIx, uint8_t addr, uint8_t data);
+MPU9250_Result MPU9250_Init(SPIClass &SPIx, uint8_t CS_GPIOx, MPU9250TypeDef* datastruct);
+MPU9250_Result MPU9250_ReadData(SPIClass &SPIx, uint8_t* buffer, uint8_t addr, uint8_t num);
+MPU9250_Result MPU9250_WriteData(SPIClass &SPIx, uint8_t addr, uint8_t data);
 
 #endif /* __ESP_MPU9250_H__*/

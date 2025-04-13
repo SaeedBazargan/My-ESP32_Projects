@@ -1,15 +1,18 @@
-#include <ESP_MPU9250.h>
-#include "Arduino.h"
+#include "ESP_MPU9250.h"
+
+// <---- ------------ Variables ------------ ---->
+SPIClass *_spi = nullptr;
+uint8_t _csPin = 0;
 
 // <---- ------------ Main MPU9250 Functions ------------ ---->
 // <---- ------------ MPU9250 Initialize ------------ ---->
-MPU9250_Result MPU9250_Init(SPIClass *SPIx, uint8_t CS_GPIOx, MPU9250TypeDef* datastruct)
+MPU9250_Result MPU9250_Init(SPIClass &SPIx, uint8_t CS_GPIOx, MPU9250TypeDef* datastruct)
 {
-    _spi = *SPIx;
+    _spi = &SPIx;
     _csPin = CS_GPIOx;
     pinMode(_csPin, OUTPUT);
     digitalWrite(_csPin,HIGH);
-    _spi.begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS);
+    _spi->begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS);
 
     uint8_t WHO_AM_I = MPU9250_WHO_AM_I;
 	uint8_t temp;
@@ -23,7 +26,7 @@ MPU9250_Result MPU9250_Init(SPIClass *SPIx, uint8_t CS_GPIOx, MPU9250TypeDef* da
 #if FreeRTOS_En
 	vTaskDelay(25 / portTICK_PERIOD_MS);
 #else
-	Delay(25);
+	delay(25);
 #endif
 
     uint8_t I2C_MST_EN = 0x20;
@@ -33,7 +36,7 @@ MPU9250_Result MPU9250_Init(SPIClass *SPIx, uint8_t CS_GPIOx, MPU9250TypeDef* da
 #if FreeRTOS_En
 	vTaskDelay(25 / portTICK_PERIOD_MS);
 #else
-	Delay(25);
+	delay(25);
 #endif
 
     uint8_t I2C_MST_CLK = 0x0D;
@@ -43,7 +46,7 @@ MPU9250_Result MPU9250_Init(SPIClass *SPIx, uint8_t CS_GPIOx, MPU9250TypeDef* da
 #if FreeRTOS_En
 	vTaskDelay(25 / portTICK_PERIOD_MS);
 #else
-	Delay(25);
+	delay(25);
 #endif
 
     uint8_t PWR_RESET = 0x80;
@@ -53,7 +56,7 @@ MPU9250_Result MPU9250_Init(SPIClass *SPIx, uint8_t CS_GPIOx, MPU9250TypeDef* da
 #if FreeRTOS_En
 	vTaskDelay(25 / portTICK_PERIOD_MS);
 #else
-	Delay(25);
+	delay(25);
 #endif
 
 	// <---- ------------ Configure PowerManagement 1 ------------ ---->
@@ -63,26 +66,28 @@ MPU9250_Result MPU9250_Init(SPIClass *SPIx, uint8_t CS_GPIOx, MPU9250TypeDef* da
 #if FreeRTOS_En
     vTaskDelay(25 / portTICK_PERIOD_MS);
 #else
-    Delay(25);
+    delay(25);
 #endif
         MPU9250_ReadData(SPIx, &temp, MPU9250_PWR_MGMT_1, 1);
         if(temp != datastruct->PWR_MGMT1)
         {
             Serial.println("Error1");
+            Serial.println(temp);
             return MPU9250_RESULT_ERROR;
         }
     
     // <---- ------------ Check WHO_AM_I Register ------------ ---->
     MPU9250_ReadData(SPIx, &temp, WHO_AM_I, 1);
-	if(temp != MPU9250_I_AM)
+	if(temp != MPU9250_WHO_AM_I && temp != MPU9250_I_AM)
     {
-        Serial.println("Error2");
+        Serial.println("Error2:");
+        Serial.println(temp);
         return MPU9250_RESULT_ERROR;
     }
 #if FreeRTOS_En
     vTaskDelay(25 / portTICK_PERIOD_MS);
 #else
-    Delay(25);
+    delay(25);
 #endif
  
     // <---- ------------ Configure PowerManagement 2 ------------ ---->
@@ -92,12 +97,13 @@ MPU9250_Result MPU9250_Init(SPIClass *SPIx, uint8_t CS_GPIOx, MPU9250TypeDef* da
 #if FreeRTOS_En
     vTaskDelay(25 / portTICK_PERIOD_MS);
 #else
-    Delay(25);
+    delay(25);
 #endif
     MPU9250_ReadData(SPIx, &temp, MPU9250_PWR_MGMT_2, 1);
     if(temp != datastruct->PWR_MGMT2)
     {
         Serial.println("Error3");
+        Serial.println(temp);
         return MPU9250_RESULT_ERROR;
     }
 
@@ -108,12 +114,13 @@ MPU9250_Result MPU9250_Init(SPIClass *SPIx, uint8_t CS_GPIOx, MPU9250TypeDef* da
 #if FreeRTOS_En
     vTaskDelay(25 / portTICK_PERIOD_MS);
 #else
-    Delay(25);
+    delay(25);
 #endif
     MPU9250_ReadData(SPIx, &temp, MPU9250_CONFIG, 1);
     if(temp != datastruct->Gyro_DLPF)
     {
         Serial.println("Error4");
+        Serial.println(temp);
         return MPU9250_RESULT_ERROR;
     }
 
@@ -124,12 +131,13 @@ MPU9250_Result MPU9250_Init(SPIClass *SPIx, uint8_t CS_GPIOx, MPU9250TypeDef* da
 #if FreeRTOS_En
     vTaskDelay(25 / portTICK_PERIOD_MS);
 #else
-    Delay(25);
+    delay(25);
 #endif
     MPU9250_ReadData(SPIx, &temp, MPU9250_GYRO_CONFIG, 1);
     if(temp != ((datastruct->Gyro_Range) << 3))
     {
         Serial.println("Error5");
+        Serial.println(temp);
         return MPU9250_RESULT_ERROR;
     }
     
@@ -140,12 +148,13 @@ MPU9250_Result MPU9250_Init(SPIClass *SPIx, uint8_t CS_GPIOx, MPU9250TypeDef* da
 #if FreeRTOS_En
     vTaskDelay(25 / portTICK_PERIOD_MS);
 #else
-    Delay(25);
+    delay(25);
 #endif
     MPU9250_ReadData(SPIx, &temp, MPU9250_ACCEL_CONFIG_2, 1);
     if(temp != datastruct->Accel_DLPF)
     {
         Serial.println("Error6");
+        Serial.println(temp);
         return MPU9250_RESULT_ERROR;
     }
 
@@ -156,12 +165,13 @@ MPU9250_Result MPU9250_Init(SPIClass *SPIx, uint8_t CS_GPIOx, MPU9250TypeDef* da
 #if FreeRTOS_En
     vTaskDelay(25 / portTICK_PERIOD_MS);
 #else
-    Delay(25);
+    delay(25);
 #endif
     MPU9250_ReadData(SPIx, &temp, MPU9250_ACCEL_CONFIG, 1);
     if(temp != ((datastruct->Accel_Range) << 3))
     {
         Serial.println("Error7");
+        Serial.println(temp);
         return MPU9250_RESULT_ERROR;
     }
 
@@ -170,36 +180,36 @@ MPU9250_Result MPU9250_Init(SPIClass *SPIx, uint8_t CS_GPIOx, MPU9250TypeDef* da
 }
 
 // <---- ------------ MPU9250 Read Data ------------ ---->
-MPU9250_Result MPU9250_ReadData(SPIClass *SPIx, uint8_t* buffer, uint8_t addr, uint8_t num)
+MPU9250_Result MPU9250_ReadData(SPIClass &SPIx, uint8_t* buffer, uint8_t addr, uint8_t num)
 {
-    _spi = *SPIx;
+    _spi = &SPIx;
     uint8_t reg = addr | 0x80;
 
-    _spi.beginTransaction(SPISettings(SPI_CLOCK_DIV16, MSBFIRST, SPI_MODE0));
+    _spi->beginTransaction(SPISettings(SPI_CLOCK_DIV16, MSBFIRST, SPI_MODE0));
     digitalWrite(_csPin, LOW);
-    _spi.transfer(reg);
+    _spi->transfer(reg);
     for(uint8_t i = 0; i < num; i++)
     {
-        buffer[i] = _spi.transfer(0x00);
+        buffer[i] = _spi->transfer(0x00);
     }
     digitalWrite(_csPin, HIGH);
-    _spi.endTransaction();
+    _spi->endTransaction();
 
     /* Return OK */
 	return MPU9250_RESULT_OK;    
 }
 
 // <---- ------------ MPU9250 Write Data ------------ ---->
-MPU9250_Result MPU9250_WriteData(SPIClass *SPIx, uint8_t addr, uint8_t data)
+MPU9250_Result MPU9250_WriteData(SPIClass &SPIx, uint8_t addr, uint8_t data)
 {
-    _spi = *SPIx;
+    _spi = &SPIx;
 
-    _spi.beginTransaction(SPISettings(SPI_CLOCK_DIV16, MSBFIRST, SPI_MODE0));
+    _spi->beginTransaction(SPISettings(SPI_CLOCK_DIV16, MSBFIRST, SPI_MODE0));
     digitalWrite(_csPin, LOW);
-    _spi.transfer(addr);
-    _spi.transfer(data);
+    _spi->transfer(addr);
+    _spi->transfer(data);
     digitalWrite(_csPin, HIGH);
-    _spi.endTransaction();
+    _spi->endTransaction();
 
     /* Return OK */
 	return MPU9250_RESULT_OK;
