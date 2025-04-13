@@ -4,7 +4,7 @@
 #include "Arduino.h"
 #include "SPI.h"
 
-#define FreeRTOS_En								0x00
+#define FreeRTOS_En								0x01
 // <---- ------------ START REGISTER MAPPING ------------ ---->
 #define MPU9250_I2C_ADDR						0xD0		// Default I2C address
 #define MPU9250_I_AM							0x71		// Who I am register value

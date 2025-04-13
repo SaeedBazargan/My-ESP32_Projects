@@ -11,7 +11,12 @@
 
 #define ZERO_MAX				20
 #define ZERO_MIN				-20
-// <---- ------------ Functions ------------ ---->
+// <---- ------------------------------------------------------------- ---->
+static TaskHandle_t readDataTask = NULL;
+static TaskHandle_t runTask = NULL;
+
+void startReadDataTask(void* parameter);
+void startRunTask(void* parameter);
 void IMU_readRawData(void);
 
 // <---- -------------- MPU9250 Configuration Structure -------------- ---->
@@ -38,24 +43,44 @@ SPIClass hspi(HSPI);
 void setup()
 {
   pinMode(led_pin, OUTPUT);
-  Serial.begin(115200);
+  Serial.begin(300);
   Serial.println("<---- MPU9250, ComplementaryFilter, and FreeRTOS starting ---->");
   
   if(MPU9250_Init(hspi, HSPI_SS, &MPU9250_Config) != MPU9250_RESULT_OK)
   {
   	Serial.println("Error: MPU9250 initialization failed.");
   }
+
+  vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+  xTaskCreatePinnedToCore(startRunTask, "RUN_TASK", 1024, NULL, 10, &runTask, app_cpu);
+  xTaskCreatePinnedToCore(startReadDataTask, "READ_DATA_TASK", 1024, NULL, 1, &readDataTask, app_cpu);
+  vTaskDelete(NULL);
 }
 
 // <---- -------------- Loop -------------- ---->
 void loop()
-{
-  digitalWrite(led_pin, HIGH);
-  delay(1000);
-  digitalWrite(led_pin, LOW);
-  delay(1000);
+{}
 
-  IMU_readRawData();
+// <---- ------------ Check Running Task ------------ ---->
+void startRunTask(void* parameter)
+{
+  for(;;)
+  {
+    digitalWrite(led_pin, HIGH);
+    vTaskDelay(500 / portTICK_PERIOD_MS);
+    digitalWrite(led_pin, LOW);
+    vTaskDelay(500 / portTICK_PERIOD_MS);  
+  }
+}
+
+// <---- ------------ IMU Read Raw Data Task ------------ ---->
+void startReadDataTask(void* parameter)
+{
+  for(;;)
+  {
+    IMU_readRawData();
+  }
 }
 
 // <---- ------------ IMU Read Raw Data ------------ ---->
