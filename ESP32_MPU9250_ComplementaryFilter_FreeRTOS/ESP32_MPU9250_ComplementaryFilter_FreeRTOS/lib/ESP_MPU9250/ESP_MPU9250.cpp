@@ -185,7 +185,7 @@ MPU9250_Result MPU9250_ReadData(SPIClass &SPIx, uint8_t* buffer, uint8_t addr, u
     _spi = &SPIx;
     uint8_t reg = addr | 0x80;
 
-    _spi->beginTransaction(SPISettings(SPI_CLOCK_DIV16, MSBFIRST, SPI_MODE0));
+    _spi->beginTransaction(SPISettings(SPI_CLOCK_DIV16, MSBFIRST, SPI_MODE3));
     digitalWrite(_csPin, LOW);
     _spi->transfer(reg);
     for(uint8_t i = 0; i < num; i++)
@@ -204,7 +204,7 @@ MPU9250_Result MPU9250_WriteData(SPIClass &SPIx, uint8_t addr, uint8_t data)
 {
     _spi = &SPIx;
 
-    _spi->beginTransaction(SPISettings(SPI_CLOCK_DIV16, MSBFIRST, SPI_MODE0));
+    _spi->beginTransaction(SPISettings(SPI_CLOCK_DIV16, MSBFIRST, SPI_MODE3));
     digitalWrite(_csPin, LOW);
     _spi->transfer(addr);
     _spi->transfer(data);
