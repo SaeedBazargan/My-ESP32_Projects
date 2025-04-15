@@ -9,6 +9,8 @@
 #endif
 
 #define led_pin         LED_BUILTIN
+#define RXD2            16
+#define TXD2            17
 
 #define ZERO_MAX				20
 #define ZERO_MIN				-20
@@ -57,6 +59,7 @@ void IMU_UpdateAngles(void);
 void setup()
 {
   pinMode(led_pin, OUTPUT);
+  Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
   Serial.begin(115200);
   Serial.println("<---- MPU9250, ComplementaryFilter, and FreeRTOS starting ---->");
 
@@ -120,10 +123,10 @@ void startSendDataTask(void* parameter)
     {
       if(xQueueReceive(Queue1_Handle, &received_data, 10) == pdTRUE)
       {
-        Serial.print("Roll ----> ");
-        Serial.println(received_data.Shifted_Roll);
-        Serial.print("Pitch ----> ");
-        Serial.println(received_data.Shifted_Pitch);
+        Serial2.print("Roll ----> ");
+        Serial2.println(received_data.Shifted_Roll);
+        Serial2.print("Pitch ----> ");
+        Serial2.println(received_data.Shifted_Pitch);
       }
       xSemaphoreGive(xSemaphore);
     }

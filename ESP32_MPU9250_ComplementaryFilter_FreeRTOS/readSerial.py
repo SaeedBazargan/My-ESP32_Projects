@@ -3,7 +3,7 @@ import time
 import pandas as pd
 
 # Open the serial port
-ser = serial.Serial('COM3', 9600, timeout=1)
+ser = serial.Serial('COM12', 9600, timeout=1)
 
 try:
     roll_var = []
@@ -17,23 +17,25 @@ try:
             if "Roll" in data:
                 roll_value = int(data.split("--->")[1].strip())
                 roll_var.append(roll_value)
-                print(f"Roll Value: {roll_value}")
+                # print(f"Roll Value: {roll_value}")
 
-                # if roll_value > 100:
-                #     print(f"Down ----> {roll_value}")
-                # elif roll_value < 94:
-                #     print(f"Up ----> {roll_value}")
+                if roll_value > 112:
+                    print(f"Left ----> {roll_value}")
+                    direction_var.append("Left")
+                elif roll_value < 94:
+                    print(f"Right ----> {roll_value}")
+                    direction_var.append("Right")
             elif "Pitch" in data:
                 pitch_value = int(data.split("--->")[1].strip())
                 pitch_var.append(pitch_value)
-                print(f"Pitch Value: {pitch_value}")
+                # print(f"Pitch Value: {pitch_value}")
 
-                # if pitch_value > 102:
-                #     print(f"Left ----> {pitch_value}")
-                #     direction_var.append("Left")
-                # elif pitch_value < 95:
-                #     print(f"Right ----> {pitch_value}")
-                #     direction_var.append("Right")
+                if pitch_value > 107:
+                    print(f"Up ----> {pitch_value}")
+                    direction_var.append("Up")
+                elif pitch_value < 96:
+                    print(f"Down ----> {pitch_value}")
+                    direction_var.append("Down")
                 # else:
                 #     direction_var.append("Motionless")  # Add empty string for neutral positions
 
