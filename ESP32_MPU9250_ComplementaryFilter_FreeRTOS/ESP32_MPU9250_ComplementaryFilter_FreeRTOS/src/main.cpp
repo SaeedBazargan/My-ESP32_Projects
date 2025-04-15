@@ -14,8 +14,11 @@
 #define ZERO_MIN				-20
 
 // <---- ------------------------------------------------------------- ---->
-static TaskHandle_t readDataTask = NULL;
 static TaskHandle_t runTask = NULL;
+static TaskHandle_t readDataTask = NULL;
+static TaskHandle_t sendDataTask = NULL;
+static QueueHandle_t Queue1_Handle;
+static SemaphoreHandle_t xSemaphore;
 
 // <---- -------------- MPU9250 Configuration Structure -------------- ---->
 MPU9250TypeDef MPU9250_Config =
@@ -33,13 +36,20 @@ uint8_t IMU_rawData[14] = {0};
 int16_t Raw_Accel[3] = {0}, Raw_Gyro[3] = {0};
 
 float GX = 0, GY = 0, GZ = 0, AX = 0, AY = 0, AZ = 0;
-float Roll, Pitch, Yaw;
+float Roll, Pitch;
+
+struct IMU_Message
+{
+	uint8_t Shifted_Roll;
+	uint8_t Shifted_Pitch;
+}IMUdata_MSG;
 
 SPIClass hspi(HSPI);
 
 // <---- ------------------------------------------------------------- ---->
-void startReadDataTask(void* parameter);
 void startRunTask(void* parameter);
+void startReadDataTask(void* parameter);
+void startSendDataTask(void* parameter);
 void IMU_readRawData(void);
 void IMU_UpdateAngles(void);
 
@@ -47,7 +57,7 @@ void IMU_UpdateAngles(void);
 void setup()
 {
   pinMode(led_pin, OUTPUT);
-  Serial.begin(300);
+  Serial.begin(115200);
   Serial.println("<---- MPU9250, ComplementaryFilter, and FreeRTOS starting ---->");
 
   if(MPU9250_Init(hspi, HSPI_SS, &MPU9250_Config) != MPU9250_RESULT_OK)
@@ -57,8 +67,12 @@ void setup()
 
   Serial.println("MPU9250 initialization successful.");
 
-  xTaskCreatePinnedToCore(startRunTask, "RUN_TASK", 2048, NULL, 2, &runTask, app_cpu);
-  xTaskCreatePinnedToCore(startReadDataTask, "READ_DATA_TASK", 2048, NULL, 1, &readDataTask, app_cpu);
+  Queue1_Handle = xQueueCreate(1, sizeof(IMUdata_MSG));
+  xSemaphore = xSemaphoreCreateMutex();
+  
+  xTaskCreatePinnedToCore(startRunTask, "RUN_TASK", 1024, NULL, 10, &runTask, app_cpu);
+  xTaskCreatePinnedToCore(startReadDataTask, "READ_DATA_TASK", (1024 << 2), NULL, 2, &readDataTask, app_cpu);
+  xTaskCreatePinnedToCore(startSendDataTask, "SEND_DATA_TASK", (1024 << 2), NULL, 1, &sendDataTask, app_cpu);
 }
 
 // <---- -------------- Loop -------------- ---->
@@ -90,8 +104,29 @@ void startReadDataTask(void* parameter)
   for(;;)
   {
     IMU_readRawData();
-
     IMU_UpdateAngles();
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+  }
+}
+
+// <---- ------------ Send IMU Data Task ------------ ---->
+void startSendDataTask(void* parameter)
+{
+  struct IMU_Message received_data;
+
+  for(;;)
+  {
+    if(xSemaphoreTake(xSemaphore, (TickType_t)10) == pdTRUE)
+    {
+      if(xQueueReceive(Queue1_Handle, &received_data, 10) == pdTRUE)
+      {
+        Serial.print("Roll ----> ");
+        Serial.println(received_data.Shifted_Roll);
+        Serial.print("Pitch ----> ");
+        Serial.println(received_data.Shifted_Pitch);
+      }
+      xSemaphoreGive(xSemaphore);
+    }
   }
 }
 
@@ -141,20 +176,27 @@ void IMU_UpdateAngles(void)
   static float last_roll, last_pitch;
   float roll_acc = 0.0, pitch_acc = 0.0;
 
+  struct IMU_Message *data;
+  data = &IMUdata_MSG;
+
   roll_acc = atan2f(AY, sqrtf((AX * AX) + (AZ * AZ)));
   pitch_acc = atan2f(-AX, sqrtf((AY * AY) + (AZ * AZ)));
   last_roll = roll_acc;
   last_pitch = pitch_acc;
-  // first_run = 0;
 
-  Serial.print("Roll:   ");
-  Serial.println(last_roll);
-  Serial.print("Pitch:   ");
-  Serial.println(last_pitch);
-  Serial.println("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz");
+  data->Shifted_Roll  = (last_roll + 10) * 10;
+  data->Shifted_Pitch = (last_pitch + 10) * 10;
 
-  // data.Shifted_Roll  = (Roll + 10) * 10;
-  // data.Shifted_Pitch = (Pitch + 10) * 10;
-  // osMessagePut(Queue_1Handle, &data, osWaitForever);
-  // osDelay(100);
+  // Serial.print("Roll ----> ");
+  // Serial.println(data.Shifted_Roll);
+  // Serial.print("Pitch ----> ");
+  // Serial.println(data.Shifted_Pitch);
+  // Serial.println("<---- ------------------- ---->");
+
+  if(xSemaphoreTake(xSemaphore, 10) == pdTRUE)
+  {
+    xQueueSend(Queue1_Handle, &IMUdata_MSG, (TickType_t)0);
+    xSemaphoreGive(xSemaphore);
+  }
+  vTaskDelay(10 / portTICK_PERIOD_MS);
 }
