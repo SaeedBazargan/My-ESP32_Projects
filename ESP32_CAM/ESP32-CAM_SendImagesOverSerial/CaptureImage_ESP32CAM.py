@@ -4,7 +4,7 @@ import os
 import time
 
 # <---- ------ Settings ------ ---->
-serial_port = 'COM5'
+serial_port = 'COM20'
 baud_rate = 115200
 save_directory = "captured_images"  # <---- ------ Folder to save images ------ ---->
 
