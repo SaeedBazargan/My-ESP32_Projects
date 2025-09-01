@@ -25,6 +25,7 @@ void setup()
 {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // Disable brownout reset
 
+  pinMode(4, OUTPUT);
   Serial.begin(115200);   // Open Serial communication
   Serial.setDebugOutput(false);
 
@@ -54,12 +55,14 @@ void setup()
   if(psramFound())
   {
     config.frame_size = FRAMESIZE_VGA;   // 640x480
+    Serial.println("HELLLLLLLLLLLLLLLLLLLLLLLLLLO");
     config.jpeg_quality = 10;
     config.fb_count = 2;
   }
   else
   {
     config.frame_size = FRAMESIZE_CIF;   // 352x288
+    Serial.println("BYYYYYYYYYYYYYYYYYYYYYE");
     config.jpeg_quality = 12;
     config.fb_count = 1;
   }
@@ -71,6 +74,8 @@ void setup()
   }
 
   delay(2000); // Wait for setup stabilization
+
+  // digitalWrite(4, HIGH);
 }
 
 void loop()
