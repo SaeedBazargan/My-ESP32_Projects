@@ -52,21 +52,7 @@ void setup()
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
   
-  // if(psramFound())
-  // {
-  //   config.frame_size = FRAMESIZE_VGA;   // 640x480
-  //   Serial.println("HELLLLLLLLLLLLLLLLLLLLLLLLLLO");
-  //   config.jpeg_quality = 10;
-  //   config.fb_count = 2;
-  // }
-  // else
-  // {
-  //   config.frame_size = FRAMESIZE_CIF;   // 352x288
-  //   Serial.println("BYYYYYYYYYYYYYYYYYYYYYE");
-  //   config.jpeg_quality = 12;
-  //   config.fb_count = 1;
-  // }
-  config.frame_size = FRAMESIZE_VGA;   // 640x480
+  config.frame_size = FRAMESIZE_QVGA;   // 320x240
   config.jpeg_quality = 10;
   config.fb_count = 2;
 
@@ -100,7 +86,7 @@ void loop()
   // <---- ------ Send actual image data ------ ---->
   Serial.write(fb->buf, fb->len); // Send raw JPEG bytes
 
-  // esp_camera_fb_return(fb); // Release the frame buffer
+  esp_camera_fb_return(fb); // Release the frame buffer
 
   delay(2000); // Take a photo every 2 seconds
 }
