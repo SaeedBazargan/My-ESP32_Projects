@@ -1,7 +1,5 @@
 #include <Arduino.h>
 #include "esp_camera.h"
-#include "soc/soc.h"            // Disable brownout detector
-#include "soc/rtc_cntl_reg.h"
 
 // <---- ------ Camera Pin Definitions ------ ---->
 #define PWDN_GPIO_NUM     32
@@ -23,11 +21,8 @@
 
 void setup()
 {
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // Disable brownout reset
-
   pinMode(4, OUTPUT);
-  Serial.begin(115200);   // Open Serial communication
-  Serial.setDebugOutput(false);
+  Serial.begin(115200);
 
   // <---- ------ Camera configuration ------ ---->
   camera_config_t config;
@@ -51,21 +46,6 @@ void setup()
   config.pin_reset = RESET_GPIO_NUM;
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
-  
-  // if(psramFound())
-  // {
-  //   config.frame_size = FRAMESIZE_VGA;   // 640x480
-  //   Serial.println("HELLLLLLLLLLLLLLLLLLLLLLLLLLO");
-  //   config.jpeg_quality = 10;
-  //   config.fb_count = 2;
-  // }
-  // else
-  // {
-  //   config.frame_size = FRAMESIZE_CIF;   // 352x288
-  //   Serial.println("BYYYYYYYYYYYYYYYYYYYYYE");
-  //   config.jpeg_quality = 12;
-  //   config.fb_count = 1;
-  // }
   config.frame_size = FRAMESIZE_VGA;   // 640x480
   config.jpeg_quality = 10;
   config.fb_count = 2;
@@ -77,21 +57,20 @@ void setup()
   }
 
   delay(2000); // Wait for setup stabilization
-
-  // digitalWrite(4, HIGH);
 }
 
 void loop()
 {
   camera_fb_t *fb = esp_camera_fb_get(); // Capture frame
-
   if(!fb)
   {
     Serial.println("Camera capture failed");
-    delay(1000);
     
     return;
   }
+
+  // <---- ------ Send start marker "IMG0" ------ ---->
+  Serial.write("IMG0", 4);
 
   // <---- ------ Send frame size first ------ ---->
   uint32_t img_len = fb->len;
@@ -100,7 +79,7 @@ void loop()
   // <---- ------ Send actual image data ------ ---->
   Serial.write(fb->buf, fb->len); // Send raw JPEG bytes
 
-  // esp_camera_fb_return(fb); // Release the frame buffer
-
-  delay(2000); // Take a photo every 2 seconds
+  esp_camera_fb_return(fb); // Release the frame buffer
 }
+
+
