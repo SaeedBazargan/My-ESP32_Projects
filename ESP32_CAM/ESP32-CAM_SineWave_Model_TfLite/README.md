@@ -2,7 +2,7 @@
 ## The way I took:
 ### 1- Install Arduino.
 ### 2- Download the library from this link:
-### https://downloads.arduino.cc/libraries/github.com/bcmi-labs/Arduino_TensorFlowLite-1.15.0-ALPHA.zip
+### https://github.com/tanakamasayuki/Arduino_TensorFlowLite_ESP32.git
 ### Or download it from my repository and add it to the software.
 ### 3- Exit Arduino.
 ### 4- Create a project with platformio.
