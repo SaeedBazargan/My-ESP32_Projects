@@ -34,110 +34,53 @@
 // <---- ------ Labels for classification results ------ ---->
 static const char *label[] = {"Ball", "Mag", "Unknown"};
 
-int bytes_per_frame;
-int bytes_per_pixel;
 uint8_t camera_Width = 160;
 uint8_t camera_Height = 120;
+int bytes_per_pixel = 2;
+int bytes_per_frame = camera_Width * camera_Height * bytes_per_pixel;
 
 // <---- ------ Variables for image scaling and preprocessing ------ ---->
-static int w0 = 0;
-static int h0 = 0;
-static int stride_in_y = 0;
-static int w1 = 0;
-static int h1 = 0;
-static float scale_x = 0.0f;
-static float scale_y = 0.0f;
+int stride_in_y = camera_Width * bytes_per_pixel;    // Initialize resolution and Setup for image scaling and model input
+static uint8_t Model_InputWidth = 48;
+static uint8_t Model_InputHeight = 48;
+static float scale_x = (float)camera_Height / (float)Model_InputWidth;
+static float scale_y = (float)camera_Height / (float)Model_InputHeight;
 
+// <---- -------- TFLite variables -------- ---->
+namespace
+{
+	tflite::MicroErrorReporter micro_error_reporter;
+	tflite::ErrorReporter* error_reporter = &micro_error_reporter;
+	const tflite::Model* tflu_model            = nullptr;
+	tflite::MicroInterpreter* interpreter = nullptr;
+  TfLiteTensor* input_tensor                = nullptr;
+  TfLiteTensor* output_tensor                = nullptr;
+
+	// <---- -------- Create an area of memory to use for input/output and other tensorflow arrays.
+	// you will need to adjust this by compiling, running, and looking for errors  -------- ---->
+	const int KTensorArenaSize = 619840;
+  static uint8_t *tensor_arena = nullptr;
+
+  float tflu_scale     = 0.0f;
+  int32_t tflu_zeropoint = 0;
+}
+TfLiteStatus tflite_status;
+
+
+// <---- ------ Helper functions ------ ---->
 // <---- ------ Helper function to limit values between 0 and 255 ------ ---->
 template <typename T>
 inline T clamp_0_255(T x)
 {
   return std::max(std::min(x, static_cast<T>(255)), static_cast<T>(0));
 }
+inline void ycbcr422_rgb888(int32_t Y, int32_t Cb, int32_t Cr, uint8_t* out);
+inline uint8_t bilinear_inter(uint8_t v00, uint8_t v01, uint8_t v10, uint8_t v11, float xi_f, float yi_f, int xi, int yi);
+inline float rescale(float x, float scale, float offset);
+inline int8_t quantize(float x, float scale, float zero_point);
+void SamplingPointCoordinate(void);
+void TFLite_Init(void);
 
-// <---- ------ Convert a single YCbCr422 pixel to RGB888 ------ ---->
-inline void ycbcr422_rgb888(int32_t Y, int32_t Cb, int32_t Cr, uint8_t* out)
-{
-  Cr -= 128;
-  Cb -= 128;
-
-  out[0] = clamp_0_255(Y + Cr + (Cr >> 2) + (Cr >> 3) + (Cr >> 5)); // R
-  out[1] = clamp_0_255(Y - ((Cb >> 2) + (Cb >> 4) + (Cb >> 5)) - ((Cr >> 1) + (Cr >> 3) + (Cr >> 4)) + (Cr >> 5)); // G
-  out[2] = clamp_0_255(Y + Cb + (Cb >> 1) + (Cb >> 2) + (Cb >> 6)); // B
-}
-
-// <---- ------ Bilinear interpolation for downscaling pixels smoothly ------ ---->
-inline uint8_t bilinear_inter(uint8_t v00, uint8_t v01, uint8_t v10, uint8_t v11, float xi_f, float yi_f, int xi, int yi) {
-    const float a  = (xi_f - xi);
-    const float b  = (1.f - a);
-    const float a1 = (yi_f - yi);
-    const float b1 = (1.f - a1);
-
-    // Calculate the output
-    return clamp_0_255((v00 * b * b1) + (v01 * a * b1) + (v10 * b * a1) + (v11 * a * a1));
-}
-
-// <---- ------ Normalize pixel value from 0–255 to a different range ------ ---->
-inline float rescale(float x, float scale, float offset)
-{
-  return (x * scale) - offset;
-}
-
-// <---- ------ Quantize floating-point value to int8 for TFLite model input ------ ---->
-inline int8_t quantize(float x, float scale, float zero_point)
-{
-  return (x / scale) + zero_point;
-}
-
-// <---- ------ TensorFlow Lite for Microcontroller global variables ------ ---->
-static const tflite::Model* tflu_model            = nullptr;
-static tflite::MicroInterpreter* tflu_interpreter = nullptr;
-static TfLiteTensor* tflu_i_tensor                = nullptr;
-static TfLiteTensor* tflu_o_tensor                = nullptr;
-static tflite::MicroErrorReporter tflu_error;
-
-static constexpr int tensor_arena_size = 619840;
-static uint8_t *tensor_arena = nullptr;
-static float   tflu_scale     = 0.0f;
-static int32_t tflu_zeropoint = 0;
-
-// <---- ------ Initialize TensorFlow Lite Micro components ------ ---->
-void tflu_initialization()
-{
-  Serial.println("TFLu initialization - start");
-
-  tensor_arena = (uint8_t *)malloc(tensor_arena_size);
-
-  // Load the TFLITE model
-  tflu_model = tflite::GetModel(object_recognition_model_tflite);
-  if(tflu_model->version() != TFLITE_SCHEMA_VERSION)
-  {
-    Serial.print(tflu_model->version());
-    Serial.println("");
-    Serial.print(TFLITE_SCHEMA_VERSION);
-    Serial.println("");
-    while(1);
-  }
-
-  tflite::AllOpsResolver tflu_ops_resolver;
-
-  // Initialize the TFLu interpreter
-  tflu_interpreter = new tflite::MicroInterpreter(tflu_model, tflu_ops_resolver, tensor_arena, tensor_arena_size, &tflu_error);
-
-  // Allocate TFLu internal memory
-  tflu_interpreter->AllocateTensors();
-
-  // Get the pointers for the input and output tensors
-  tflu_i_tensor = tflu_interpreter->input(0);
-  tflu_o_tensor = tflu_interpreter->output(0);
-
-  // Retrieve quantization parameters from model input tensor and Get the quantization parameters (per-tensor quantization)
-  const auto* i_quantization = reinterpret_cast<TfLiteAffineQuantization*>(tflu_i_tensor->quantization.params);
-  tflu_scale     = i_quantization->scale->data[0];
-  tflu_zeropoint = i_quantization->zero_point->data[0];
-
-  Serial.println("TFLu initialization - completed");
-}
 
 void setup()
 {
@@ -176,22 +119,7 @@ void setup()
     while(1);
   }
 
-  bytes_per_pixel = 2;
-  bytes_per_frame = camera_Width * camera_Height * bytes_per_pixel;
-
-  // Initialize TFLu
-  tflu_initialization();
-
-  // Initialize resolution and Setup for image scaling and model input
-  w0 = camera_Height;
-  h0 = camera_Height;
-  stride_in_y = camera_Width * bytes_per_pixel;
-  w1 = 48;  // Model input width
-  h1 = 48;  // Model input height
-
-  // Calculate scale factors for resizing image
-  scale_x = (float)w0 / (float)w1;
-  scale_y = (float)h0 / (float)h1;
+  TFLite_Init();
 
   delay(2000); // Wait for setup stabilization  
 }
@@ -206,22 +134,87 @@ void loop()
     return;
   }
 
+  SamplingPointCoordinate();
+
+  // Run inference
+  tflite_status = interpreter->Invoke();
+  if(tflite_status != kTfLiteOk)
+  {
+    Serial.println("Error invoking the TFLu interpreter");
+
+    return;
+  }
+
+  size_t ix_max = 0;
+  float  pb_max = 0;
+  for(size_t ix = 0; ix < 3; ix++)
+  {
+    if(output_tensor->data.f[ix] > pb_max)
+    {
+      ix_max = ix;
+      pb_max = output_tensor->data.f[ix];
+    }
+  }
+
+  Serial.println(label[ix_max]);
+  
+  esp_camera_fb_return(fb); // Release the frame buffer
+}
+
+// <---- ------ Convert a single YCbCr422 pixel to RGB888 ------ ---->
+inline void ycbcr422_rgb888(int32_t Y, int32_t Cb, int32_t Cr, uint8_t* out)
+{
+  Cr -= 128;
+  Cb -= 128;
+
+  out[0] = clamp_0_255(Y + Cr + (Cr >> 2) + (Cr >> 3) + (Cr >> 5)); // R
+  out[1] = clamp_0_255(Y - ((Cb >> 2) + (Cb >> 4) + (Cb >> 5)) - ((Cr >> 1) + (Cr >> 3) + (Cr >> 4)) + (Cr >> 5)); // G
+  out[2] = clamp_0_255(Y + Cb + (Cb >> 1) + (Cb >> 2) + (Cb >> 6)); // B
+}
+
+// <---- ------ Bilinear interpolation for downscaling pixels smoothly ------ ---->
+inline uint8_t bilinear_inter(uint8_t v00, uint8_t v01, uint8_t v10, uint8_t v11, float xi_f, float yi_f, int xi, int yi)
+{
+    const float a  = (xi_f - xi);
+    const float b  = (1.f - a);
+    const float a1 = (yi_f - yi);
+    const float b1 = (1.f - a1);
+
+    // Calculate the output
+    return clamp_0_255((v00 * b * b1) + (v01 * a * b1) + (v10 * b * a1) + (v11 * a * a1));
+}
+
+// <---- ------ Normalize pixel value from 0–255 to a different range ------ ---->
+inline float rescale(float x, float scale, float offset)
+{
+  return (x * scale) - offset;
+}
+
+// <---- ------ Quantize floating-point value to int8 for TFLite model input ------ ---->
+inline int8_t quantize(float x, float scale, float zero_point)
+{
+  return (x / scale) + zero_point;
+}
+
+// <---- ------ Calculate the corresponding sampling point position for each output coordinate ------ ---->
+void SamplingPointCoordinate(void)
+{
   uint8_t rgb888[3];
   int idx = 0;
-  for(int yo = 0; yo < h1; yo++)
+  for(uint8_t yo = 0; yo < Model_InputHeight; yo++)
   {
     const float yi_f = (yo * scale_y);
     const int yi = (int)std::floor(yi_f);
     
-    for(int xo = 0; xo < w1; xo++)
+    for(int xo = 0; xo < Model_InputWidth; xo++)
     {
       const float xi_f = (xo * scale_x);
       const int xi = (int)std::floor(xi_f);
 
       int x0 = xi;
       int y0 = yi;
-      int x1 = std::min(xi + 1, w0 - 1);
-      int y1 = std::min(yi + 1, h0 - 1);
+      int x1 = std::min(xi + 1, camera_Height - 1);
+      int y1 = std::min(yi + 1, camera_Height - 1);
 
       // Calculate the offset to access the Y component
       int ix_y00 = x0 * sizeof(int16_t) + y0 * stride_in_y;
@@ -272,32 +265,57 @@ void loop()
         c_i = bilinear_inter(rgb00[i], rgb01[i], rgb10[i], rgb11[i], xi_f, yi_f, xi, yi);
         c_f = rescale((float)c_i, 1.f/255.f, -1.f);
         c_q = quantize(c_f, tflu_scale, tflu_zeropoint);
-        tflu_i_tensor->data.int8[idx++] = c_q;
+        input_tensor->data.int8[idx++] = c_q;
       }
     }
   }
-  // Run inference
-  TfLiteStatus invoke_status = tflu_interpreter->Invoke();
-  if(invoke_status != kTfLiteOk)
-  {
-    Serial.println("Error invoking the TFLu interpreter");
-    return;
-  }
-
-  size_t ix_max = 0;
-  float  pb_max = 0;
-  for(size_t ix = 0; ix < 3; ix++)
-  {
-    if(tflu_o_tensor->data.f[ix] > pb_max)
-    {
-      ix_max = ix;
-      pb_max = tflu_o_tensor->data.f[ix];
-    }
-  }
-
-  Serial.println(label[ix_max]);
-  
-  esp_camera_fb_return(fb); // Release the frame buffer
 }
 
+// <---- ------ Initialize TensorFlow Lite Micro components ------ ---->
+void TFLite_Init(void)
+{
+  Serial.println("TFLu initialization - start");
 
+  uint8_t *tensor_arena = (uint8_t *)malloc(KTensorArenaSize);
+
+  // Load the TFLITE model
+  tflu_model = tflite::GetModel(object_recognition_model_tflite);
+  if(tflu_model->version() != TFLITE_SCHEMA_VERSION)
+  {
+    Serial.print(tflu_model->version());
+    Serial.println("");
+    Serial.print(TFLITE_SCHEMA_VERSION);
+    Serial.println("Model version does not match schema.");
+
+    while(1);
+  }
+
+  tflite::AllOpsResolver tflu_ops_resolver;
+
+  // <---- -------- build an interpreter to run the model -------- ---->
+  static tflite::MicroInterpreter static_interpreter(tflu_model, tflu_ops_resolver, tensor_arena, KTensorArenaSize, error_reporter);
+  interpreter = &static_interpreter;
+
+  // <---- -------- Allocate memory from the tensor_arena for the model's tensors. -------- ---->
+  tflite_status = interpreter->AllocateTensors();
+  if(tflite_status != kTfLiteOk)
+  {
+	  error_reporter->Report("AllocateTensors failed.");
+
+    Serial.println("AllocateTensors failed.");
+
+	  while(1);
+  }
+
+  // <---- -------- Allocate model input/output buffers(tensors) to pointers -------- ---->
+  input_tensor  = interpreter->input(0);
+  output_tensor = interpreter->output(0);  
+
+  // <---- -------- Get number of parameters in input tensor -------- ---->
+  // Retrieve quantization parameters from model input tensor and Get the quantization parameters (per-tensor quantization)
+  const auto* i_quantization = reinterpret_cast<TfLiteAffineQuantization*>(input_tensor->quantization.params);
+  tflu_scale     = i_quantization->scale->data[0];
+  tflu_zeropoint = i_quantization->zero_point->data[0];
+
+  Serial.println("TFLu initialization - completed");
+}
